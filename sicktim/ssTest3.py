@@ -17,6 +17,26 @@ ranges = list()
 prevRanges = [0,0,0]
 prevPrevRanges = [0,0,0]
 
+def createObstacleCluster(distances,startAngles,stopAngles):
+    listOfObstacles = []
+    
+    for i,angles in enumerate(startAngles):
+        listOfObstacles.append(Obstacles(distance[startAngles[i]:stopAngles[i]],[startAngles[i], stopAngles[i]]))
+            
+
+def drawObstacles():
+    
+    if size of obstacle < 5:
+        make circle
+    elif width of obstacle < 0.2*length of obstacle:
+        make line
+    elif width of obstacle >= 0.2*length of obstacle:
+        make rectangle
+    else:
+        dont cluster? do nothing?
+    
+    return
+
 def polar2Cart(angle, radius, tilt):
     x = radius * math.cos(math.radians(angle))*math.cos(math.radians(tilt))
     y = radius * math.sin(math.radians(angle))*math.cos(math.radians(tilt))
@@ -29,43 +49,46 @@ def distanceCalc(x1,x2,y1,y2):
 def segments(dataPoints):
     mergeDistance = 0.8
     downTiltAngle = 0
-    startPoints = []
-    stopPoints = []
+    startAngles = []
+    stopAngles = []
     #start angle: 55 deg, end at 215
+    #finds start and stop points
     for i,distance in enumerate(dataPoints[1:268]):
         #try:
         if dataPoints[i-1] == 0 and dataPoints[i] != 0: #or dataPoints i-1 to i > mergeDistance:
-            startPoints.append(i)
+            startAngles.append(i)
         if dataPoints[i] != 0 and dataPoints[i+1] == 0:
-            stopPoints.append(i)
+            stopAngles.append(i)
         
         #convert the (polar) data points to points in a cartesian system
         #offset the angle such that X-axis is left-right, Y-axis is forward-backward
-        
-    if startPoints[0] > stopPoints[0]:
-        startPoints.insert(0,0)
-    if len(startPoints) > len(stopPoints):
-        stopPoints.append(269)
     
-    for i,stopIndex in enumerate(stopPoints[0:len(stopPoints)-1]):
+    #ensures proper conditions at beginning and end of each scan
+    if startAngles[0] > stopAngles[0]:
+        startAngles.insert(0,0)
+    if len(startAngles) > len(stopAngles):
+        stopAngles.append(269)
+    
+    #merges close obstacles
+    for i,stopIndex in enumerate(stopAngles[0:len(stopAngles)-1]):
         #calculate distances
-        x1, y1 = polar2Cart(startPoints[i+1]+45,dataPoints[startPoints[i+1]],downTiltAngle)
-        x2, y2 = polar2Cart(stopPoints[i]+45,dataPoints[stopPoints[i]],downTiltAngle)
+        x1, y1 = polar2Cart(startAngles[i+1]+45,dataPoints[startAngles[i+1]],downTiltAngle)
+        x2, y2 = polar2Cart(stopAngles[i]+45,dataPoints[stopAngles[i]],downTiltAngle)
         killList = []
         
         D = distanceCalc(x2,x1,y2,y1)
         
         if D < mergeDistance:
             killList.append(i)
-            
-    for i in reversed(killList):
-        del startPoints[i+1]
-        del stopPoints[i]
-        #if the distance smaller than mergeDistance, merge
-        
-    print(str(startPoints) + "  " + str(stopPoints))
     
-    return startPoints, stopPoints
+    #deletes too small gaps
+    for i in reversed(killList):
+        del startAngles[i+1]
+        del stopAngles[i]
+        
+    #print(str(startAngles) + "  " + str(stopAngles))
+    
+    return startAngles, stopAngles
 
 def medianFilter(ranges, prevRanges, prevPrevRanges):
     result = [0]*269
@@ -131,12 +154,17 @@ def callback(data):
             """
     
     filteredRanges = medianFilter(ranges, prevRanges, prevPrevRanges)    
-    startPoints, stopPoints = segments(filteredRanges)
+    startAngles, stopAngles = segments(filteredRanges)
     
+    obstacleClusters = createObstacleCluster(distances,startAngles,stopAngles):
     
+    vizRanges = filteredRanges
+    
+    for stopIndex,stopAngle in enumerate(stopAngles[0:len(stopAngles)-1]):
+        vizRanges[stopAngle:startAngles[stopIndex+1]] = [0]*len(vizRanges[stopAngle:startAngles[stopIndex+1]])
     
     newLaserScan = data
-    newLaserScan.ranges=filteredRanges
+    newLaserScan.ranges=vizRanges
     pub.publish(newLaserScan)
     regions = {
         #"right": min(min(data.ranges[50:74]),10),
@@ -160,7 +188,7 @@ def listener():
     rospy.init_node('listener', anonymous=True) #listener
 
     rospy.Subscriber("scan", LaserScan, callback)
-    pub = rospy.Publisher('scanFiltered', LaserScan, queue_size=10)
+    pub = rospy.Publisher('scanFiltered', LaserScan, queue_size=4)
     # spin() simply keeps python from exiting until this node is stopped
     rospy.spin()
 
