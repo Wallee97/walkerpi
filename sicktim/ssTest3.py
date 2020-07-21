@@ -1,44 +1,69 @@
 #!/usr/bin/env python
+
 import rospy
 from std_msgs.msg import String
 from sensor_msgs.msg import LaserScan
 import time
-import Adafruit_MCP4725
+import adafruit_mcp4725
 import math
 import numpy
+import board
+import busio
+import ObstacleClustering
+import matplotlib.pyplot as plt
+
 # Create a DAC instance.
-dac1 = Adafruit_MCP4725.MCP4725(address=0x60, busnum=1)
-dac2 = Adafruit_MCP4725.MCP4725(address=0x61, busnum=1)
+i2c = busio.I2C(board.SCL,board.SDA)
+#dac1 = adafruit_mcp4725.MCP4725(i2c, address=0x60)
+#dac2 = adafruit_mcp4725.MCP4725(i2c, address=0x61)
 
 brakeDistance = 0.35
-stairDistance = 1.5
+stairDistance = 0.6
 downTiltAngle = 0
 breakVoltage = 1500
 ranges = list()
 prevRanges = [0,0,0]
 prevPrevRanges = [0,0,0]
 
-def createObstacleCluster(distances,obstacleCoords):
-    listOfObstacles = []
+
+def findLineDev(m,b, pointCoordPair):
+    pass
+
+def createLine(x1,x2,y1,y2,obstLen):
+    #Creates a line according to y=mx+b
+    m = (y2-y1) / (x2-x1)
+    b = y1 - m*x1
     
-    for i,angles in enumerate(startAngles):
-        listOfObstacles.append(Obstacles(distances,obstacleCoords))
-            
+    ortom = -1/m
+    ang = numpy.arctan2(ortom,1)
+    xOffset = numpy.cos(ang)
+    yOffset = numpy.sin(ang)
+    ortoVector = [xOffset, yOffset]
+    
+    #c*y1 = m*x1 + b -> m*x1 - c*y1 = b -> normal vector = (m,-y1) -> unit vector = sqrt(m^2 + 1^2) * (m,1) Offset = D*unit vector (x,y)
+    
+    
+    linePointsX = numpy.linspace(x1,x2,num=obstLen)
+    linePointsY = numpy.linspace(y1,y2,num=obstLen)
+    linePoints = list(zip(linePointsX,linePointsY))
+    
+    return linePoints, ortoVector
 
 def polar2Cart(angle, radius):
     x = radius * math.cos(math.radians(angle))*math.cos(math.radians(downTiltAngle))
     y = radius * math.sin(math.radians(angle))*math.cos(math.radians(downTiltAngle))
-    return x,y
+    return x,-y #return -y because 0 degrees points backwards from sensor
 
 def distanceCalc(x1,x2,y1,y2):
     return math.sqrt( (x2-x1)**2 + (y2-y1)**2 )
         
 def segments(dataPoints):
-    mergeDistance = 0.8
+    mergeDistance = 0.4
     startAngles = []
     stopAngles = []
     obstacleAnglesList = []
     obstacleRadiusList = []
+    killList = []
     #start angle: 55 deg, end at 215
     #finds start and stop points
     for i,distance in enumerate(dataPoints[1:268]):
@@ -52,11 +77,13 @@ def segments(dataPoints):
         #offset the angle such that X-axis is left-right, Y-axis is forward-backward
     
     # Ensures proper conditions at beginning and end of each scan
-    if startAngles[0] > stopAngles[0]:
-        startAngles.insert(0,0)
-    if len(startAngles) > len(stopAngles):
-        stopAngles.append(269)
-    
+    try:    
+        if startAngles[0] > stopAngles[0]:
+            startAngles.insert(0,0)
+        if len(startAngles) > len(stopAngles):
+            stopAngles.append(269)
+    except IndexError:
+        print("No obstacles in sight")
     # Merges close obstacles
     for i,stopIndex in enumerate(stopAngles[0:len(stopAngles)-1]):
 
@@ -76,7 +103,10 @@ def segments(dataPoints):
     
     obstacleAnglesList = list(zip(startAngles,stopAngles))
     for anglePair in obstacleAnglesList:
-        obstacleRadiusList.append(dataPoints[ anglePair[0]:anglePair[1] ])
+        if anglePair[0] == anglePair[1]:
+            obstacleRadiusList.append(dataPoints[ anglePair[0] ])
+        else:
+            obstacleRadiusList.append(dataPoints[ anglePair[0]:anglePair[1] ])
     # example: obstacleAnglesList = [ [15, 20], [33,46], [69,89], [125,148] ]
     # example: obstacleRadiusList = [ [0.1535, 0.1525, 0.1530, 0.1535, 0.1539], [0.7432, 0.7468, 0.7492, ...], ... ]
     return obstacleAnglesList, obstacleRadiusList
@@ -109,11 +139,21 @@ def callback(data):
     filteredRanges = medianFilter(ranges, prevRanges, prevPrevRanges)    
     obstacleAnglesList, obstacleRadiusList = segments(filteredRanges)
     for pair in obstacleAnglesList:
-        fullAngleList.append(  list(range(pair[0], pair[1]))  )
+        if pair[0] == pair[1]:
+            fullAngleList.append( [pair[0]] )
+        else:
+            fullAngleList.append(  list(range(pair[0], pair[1]))  )
 
-    # Ex: fullAngleList =[ [15, 16, ..., 19,  20], [33, 34, ..., 46], [69, ..., 89], [125, ... , 148] ] 
-
-    obstacleClusters = createObstacleCluster(fullAngleList,obstacleRadiusList, downTiltAngle)
+    # Ex: fullAngleList =[ [15, 16, ..., 19,  20], [33, 34, ..., 46], [69, ..., 89], [125, ... , 148] ]
+    #print(fullAngleList)
+    
+    listOfObstacles = []
+    for obstNo,angles in enumerate(fullAngleList):
+        obstacleClusters = ObstacleClustering.Obstacle(fullAngleList[obstNo],obstacleRadiusList[obstNo], downTiltAngle)
+        listOfObstacles.append(obstacleClusters)
+    
+    plt.show()
+    plt.pause(0.05)
     
     vizRanges = filteredRanges
     
