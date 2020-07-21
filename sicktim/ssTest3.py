@@ -12,45 +12,33 @@ dac2 = Adafruit_MCP4725.MCP4725(address=0x61, busnum=1)
 
 brakeDistance = 0.35
 stairDistance = 1.5
+downTiltAngle = 0
 breakVoltage = 1500
 ranges = list()
 prevRanges = [0,0,0]
 prevPrevRanges = [0,0,0]
 
-def createObstacleCluster(distances,startAngles,stopAngles):
+def createObstacleCluster(distances,obstacleCoords):
     listOfObstacles = []
     
     for i,angles in enumerate(startAngles):
-        listOfObstacles.append(Obstacles(distance[startAngles[i]:stopAngles[i]],[startAngles[i], stopAngles[i]]))
+        listOfObstacles.append(Obstacles(distances,obstacleCoords))
             
 
-def drawObstacles():
-    
-    if size of obstacle < 5:
-        make circle
-    elif width of obstacle < 0.2*length of obstacle:
-        make line
-    elif width of obstacle >= 0.2*length of obstacle:
-        make rectangle
-    else:
-        dont cluster? do nothing?
-    
-    return
-
-def polar2Cart(angle, radius, tilt):
-    x = radius * math.cos(math.radians(angle))*math.cos(math.radians(tilt))
-    y = radius * math.sin(math.radians(angle))*math.cos(math.radians(tilt))
+def polar2Cart(angle, radius):
+    x = radius * math.cos(math.radians(angle))*math.cos(math.radians(downTiltAngle))
+    y = radius * math.sin(math.radians(angle))*math.cos(math.radians(downTiltAngle))
     return x,y
 
 def distanceCalc(x1,x2,y1,y2):
     return math.sqrt( (x2-x1)**2 + (y2-y1)**2 )
         
-
 def segments(dataPoints):
     mergeDistance = 0.8
-    downTiltAngle = 0
     startAngles = []
     stopAngles = []
+    obstacleAnglesList = []
+    obstacleRadiusList = []
     #start angle: 55 deg, end at 215
     #finds start and stop points
     for i,distance in enumerate(dataPoints[1:268]):
@@ -63,17 +51,17 @@ def segments(dataPoints):
         #convert the (polar) data points to points in a cartesian system
         #offset the angle such that X-axis is left-right, Y-axis is forward-backward
     
-    #ensures proper conditions at beginning and end of each scan
+    # Ensures proper conditions at beginning and end of each scan
     if startAngles[0] > stopAngles[0]:
         startAngles.insert(0,0)
     if len(startAngles) > len(stopAngles):
         stopAngles.append(269)
     
-    #merges close obstacles
+    # Merges close obstacles
     for i,stopIndex in enumerate(stopAngles[0:len(stopAngles)-1]):
-        #calculate distances
-        x1, y1 = polar2Cart(startAngles[i+1]+45,dataPoints[startAngles[i+1]],downTiltAngle)
-        x2, y2 = polar2Cart(stopAngles[i]+45,dataPoints[stopAngles[i]],downTiltAngle)
+
+        x1, y1 = polar2Cart(startAngles[i+1]+45,dataPoints[startAngles[i+1]])
+        x2, y2 = polar2Cart(stopAngles[i]+45,dataPoints[stopAngles[i]])
         killList = []
         
         D = distanceCalc(x2,x1,y2,y1)
@@ -81,23 +69,22 @@ def segments(dataPoints):
         if D < mergeDistance:
             killList.append(i)
     
-    #deletes too small gaps
+    # Deletes gaps that are too small
     for i in reversed(killList):
         del startAngles[i+1]
         del stopAngles[i]
-        
-    #print(str(startAngles) + "  " + str(stopAngles))
     
-    return startAngles, stopAngles
+    obstacleAnglesList = list(zip(startAngles,stopAngles))
+    for anglePair in obstacleAnglesList:
+        obstacleRadiusList.append(dataPoints[ anglePair[0]:anglePair[1] ])
+    # example: obstacleAnglesList = [ [15, 20], [33,46], [69,89], [125,148] ]
+    # example: obstacleRadiusList = [ [0.1535, 0.1525, 0.1530, 0.1535, 0.1539], [0.7432, 0.7468, 0.7492, ...], ... ]
+    return obstacleAnglesList, obstacleRadiusList
 
 def medianFilter(ranges, prevRanges, prevPrevRanges):
     result = [0]*269
     for i in range(len(ranges)-2):
         current=ranges[i:i+2] + prevRanges[i:i+2] + prevPrevRanges[i:i+2]
-        """   
-        while float('inf') in current:
-            current.remove(float('inf'))
-            """
         result[i] = numpy.nanmedian(current)
         if result[i] > stairDistance:
             result[i] = 0
@@ -110,58 +97,28 @@ def medianFilter(ranges, prevRanges, prevPrevRanges):
     # For now, only handle obstacles, and not stairs
     return result
 
-"""
-def turn(direction):
-    print("Turning " + direction)
-    if direction == "left":
-        dac1.set_voltage(breakVoltage, True)
-        dac2.set_voltage(0, True)
-    elif direction == "right":
-        dac1.set_voltage(0, True)
-        dac2.set_voltage(breakVoltage, True)
-    elif direction == "straight":
-        dac1.set_voltage(0, True)
-        dac2.set_voltage(0, True)
-    else:
-        print("Faulty message")
-        dac1.set_voltage(0, True)
-        dac2.set_voltage(0, True)
-"""
-def dangerDetection(regionData):
-    if regionData > stairDistance or regionData < brakeDistance:
-        return True
-    else:
-        return False
-
-def take_actions(regions):
-    #message = min(regions, key=lambda x: regions[x])
-    #print("Something is close to my" + message)
-    #time.sleep(0.1)
-    rospy.loginfo(state_description)
-
 def callback(data):
     global ranges
     global prevRanges
     global pub
+    fullAngleList = []
     prevPrevRanges = prevRanges
     prevRanges = ranges
     ranges = list(data.ranges)
 
-    """
-    for i in range(len(ranges)):
-        if ranges[i] == float('inf'):
-            ranges[i]=0
-            """
-    
     filteredRanges = medianFilter(ranges, prevRanges, prevPrevRanges)    
-    startAngles, stopAngles = segments(filteredRanges)
-    
-    obstacleClusters = createObstacleCluster(distances,startAngles,stopAngles):
+    obstacleAnglesList, obstacleRadiusList = segments(filteredRanges)
+    for pair in obstacleAnglesList:
+        fullAngleList.append(  list(range(pair[0], pair[1]))  )
+
+    # Ex: fullAngleList =[ [15, 16, ..., 19,  20], [33, 34, ..., 46], [69, ..., 89], [125, ... , 148] ] 
+
+    obstacleClusters = createObstacleCluster(fullAngleList,obstacleRadiusList, downTiltAngle)
     
     vizRanges = filteredRanges
     
-    for stopIndex,stopAngle in enumerate(stopAngles[0:len(stopAngles)-1]):
-        vizRanges[stopAngle:startAngles[stopIndex+1]] = [0]*len(vizRanges[stopAngle:startAngles[stopIndex+1]])
+    #for stopIndex,stopAngle in enumerate(stopAngles[0:len(stopAngles)-1]):
+    #    vizRanges[stopAngle:startAngles[stopIndex+1]] = [0]*len(vizRanges[stopAngle:startAngles[stopIndex+1]])
     
     newLaserScan = data
     newLaserScan.ranges=vizRanges
