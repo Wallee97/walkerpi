@@ -13,7 +13,7 @@ class Obstacle:
         #find width and length of that object using obstacleRadius[0:end]
         #determine shape of that object using width and length
         
-        plt.axis([-1,1,-1,1])
+        #plt.axis([-1,1,-1,1])
         
         
         if type(obstacleRadius) == numpy.float64:
@@ -38,8 +38,8 @@ class Obstacle:
         #S = distanceCalc( cartCoord[0][0], cartCoord[-1][0], cartCoord[0][1], cartCoord[-1][1])
         
         
-        if len(obstacleCart) <= 5:
-            
+        if len(obstacleCart) <= 10:
+            # Circle case: returns the radius of the circle, and its centerpoint coordinates as [x,y]
             x0 = (obstacleCart[0][0] + obstacleCart[-1][0]) / 2
             y0 = (obstacleCart[0][1] + obstacleCart[-1][1]) / 2
             r = []
@@ -65,15 +65,17 @@ class Obstacle:
             
             # Determine rectangle or line
             if Dmax < 0.2*S:
+                # Line case: returns the 2 endpoints of the line
                 self.p1 = [x1,y1]
                 self.p2 = [x2,y2]
                 self.shape = "line"
             
             elif Dmax >= 0.2*S:
+                # Rectangle case: returns the 4 corner points of the rectangular obstacle
                 self.p1 = [x1 + ortoVector[0]*Dmax, y1 + ortoVector[1]*Dmax]
                 self.p2 = [x1 - ortoVector[0]*Dmax, y1 - ortoVector[1]*Dmax]
-                self.p3 = [x2 + ortoVector[0]*Dmax, y2 + ortoVector[1]*Dmax]
-                self.p4 = [x2 - ortoVector[0]*Dmax, y2 - ortoVector[1]*Dmax]
+                self.p3 = [x2 - ortoVector[0]*Dmax, y2 - ortoVector[1]*Dmax]
+                self.p4 = [x2 + ortoVector[0]*Dmax, y2 + ortoVector[1]*Dmax]
                 #Use ortoVector to offset endpoints of linePoints by +-D
                 self.shape = "rectangle"
                 
@@ -91,22 +93,6 @@ class Obstacle:
         else:
             pass
         
-        print(self.shape)
+        #print(self.shape)
         
         #plt.show()
-        
-        
-        #self.shape = shape
-        #self.p1 = p1
-        #self.p2 = p2
-        #self.p3 = p3
-        #self.p4 = p4
-       
-        
-    def clustering():
-        pass
-    
-    def figure():
-        pass
-    
-    
