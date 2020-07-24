@@ -84,7 +84,7 @@ def generatePointCloud(obstacleCart):
         
         cloud.points.append(Point32( obstacleCart[i][0], obstacleCart[i][1], 0 ))
     
-    print()
+    
     #cloudpub.publish(cloud)
     return cloud
 
@@ -275,8 +275,8 @@ def callback(data):
     xVals = [ o.x for o in cloud.points ]
     yVals = [ o.y for o in cloud.points ]
     
-    print("x = " + str(xVals) + ", y = " + str(yVals))
-    print()
+    #print("x = " + str(xVals) + ", y = " + str(yVals))
+    #print()
     
     
     """
