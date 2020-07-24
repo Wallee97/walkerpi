@@ -1,5 +1,15 @@
 #!/usr/bin/env python
 
+# This is an experimental algorithm based on the algorithm described below which aimed to detect and classify obstacles detected near the Walker
+# It is currently unfinished, as it does not properly classify or place objects in space around the Walker.
+# This was written based on the ssTest3 script. More explanations are described there, including how to start it.
+
+
+# Based on an algorithm developed by Y.Peng, D. Qu, Y, Zhong, S. Xie, J. Luo, and J.Gu,
+# "The Obstacle Detection and Obstacle Avoidance Algorithm Based on 2-D Lidar", 
+# Proceeding of the 2015 IEEE International Conference on Information and Automation, Lijiang, China, August, 2015
+
+
 import rospy
 from std_msgs.msg import String
 from std_msgs.msg import Header
@@ -16,10 +26,8 @@ import ObstacleClustering
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-# Create a DAC instance.
+
 i2c = busio.I2C(board.SCL,board.SDA)
-#dac1 = adafruit_mcp4725.MCP4725(i2c, address=0x60)
-#dac2 = adafruit_mcp4725.MCP4725(i2c, address=0x61)
 
 brakeDistance = 0.35
 stairDistance = 0.6
@@ -31,34 +39,6 @@ prevPrevRanges = [0,0,0]
 #plotFigFlag = False
 
 
-"""
-fig = plt.figure()
-ax = fig.add_subplot(1, 1, 1)
-xs = []
-ys = []
-
-def animate(i, xs, ys):
-
-    # Read temperature (Celsius) from TMP102
-    #temp_c = round(tmp102.read_temp(), 2)
-
-    # Add x and y to lists
-    #xs.append(xs)
-    #ys.append(ys)
-
-    # Limit x and y lists to 20 items
-    xs = xs[-1000:]
-    ys = ys[-1000:]
-
-    # Draw x and y lists
-    ax.clear()
-    ax.plot(xs, ys)
-
-    # Format plot
-    plt.xticks(rotation=45, ha='right')
-    plt.subplots_adjust(bottom=0.30)
-    plt.title('TMP102 Temperature over Time')
-    plt.ylabel('Temperature (deg C)')"""
 
 def generatePointCloud(obstacleCart):
     global cloud
@@ -68,24 +48,9 @@ def generatePointCloud(obstacleCart):
     numberOfPoints = len(obstacleCart)
     cloud = PointCloud()
     cloud.header = h
-    #cloud.points = numberOfPoints
     point = []
-    #p = Point32()
     for i in range(0,numberOfPoints):
-        #print(obstacleCart[i])
-        
-        #p.x = obstacleCart[i][0]
-        #p.y = obstacleCart[i][1]
-        #p.z = 0
-        
-        #print(p.x)
-        
-        
-        
         cloud.points.append(Point32( obstacleCart[i][0], obstacleCart[i][1], 0 ))
-    
-    
-    #cloudpub.publish(cloud)
     return cloud
 
 def generatePointList(obstacle):
@@ -101,8 +66,6 @@ def generatePointList(obstacle):
             coords[-1][0] += x0
             coords[-1][1] += y0
         
-        
-        
     elif obstacle.shape == "line":
         p1 = obstacle.p1
         p2 = obstacle.p2
@@ -110,9 +73,7 @@ def generatePointList(obstacle):
         x = numpy.linspace(p1[0],p2[0],length)
         y = numpy.linspace(p1[0],p2[0],length)
         pair = list(zip(x,y))
-        
         coords = pair
-        
         
     elif obstacle.shape == "rectangle":
         p1 = obstacle.p1
@@ -131,13 +92,14 @@ def generatePointList(obstacle):
         
         coords = L1+L2+L3+L4 
         
-        
     else:
         print("Could not generate point list, shape of obstacle unknown")
     return coords
 
 def createLine(x1,x2,y1,y2,obstLen):
-    #Creates a line according to y=mx+b
+    #Interpolates a line between two points in 2D space
+    #Also returns the ortogonal vector from this created line, which is useful for drawing a rectangular box shape
+    
     m = (y2-y1) / (x2-x1)
     b = y1 - m*x1
     
@@ -146,9 +108,6 @@ def createLine(x1,x2,y1,y2,obstLen):
     xOffset = numpy.cos(ang)
     yOffset = numpy.sin(ang)
     ortoVector = [xOffset, yOffset]
-    
-    #c*y1 = m*x1 + b -> m*x1 - c*y1 = b -> normal vector = (m,-y1) -> unit vector = sqrt(m^2 + 1^2) * (m,1) Offset = D*unit vector (x,y)
-    
     
     linePointsX = numpy.linspace(x1,x2,num=obstLen)
     linePointsY = numpy.linspace(y1,y2,num=obstLen)
@@ -159,12 +118,14 @@ def createLine(x1,x2,y1,y2,obstLen):
 def polar2Cart(angle, radius):
     x = radius * numpy.cos(numpy.radians(angle)) * numpy.cos(numpy.radians(downTiltAngle))
     y = radius * numpy.sin(numpy.radians(angle)) * numpy.cos(numpy.radians(downTiltAngle))
-    return x,y #return -y because 0 degrees points backwards from sensor
+    return x,y
 
 def distanceCalc(x1,x2,y1,y2):
     return math.sqrt( (x2-x1)**2 + (y2-y1)**2 )
         
 def segments(dataPoints):
+    # Combines clusters of closely placed detected obstacles
+    # I.e. if two obstacles are detected within mergeDistance of each other, they are combined and thereon treated as one single obstacle
     mergeDistance = 0.2
     startAngles = []
     stopAngles = []
@@ -174,14 +135,12 @@ def segments(dataPoints):
     #start angle: 55 deg, end at 215
     #finds start and stop points
     for i,distance in enumerate(dataPoints[1:268]):
-        #try:
         if dataPoints[i-1] == 0 and dataPoints[i] != 0: #or dataPoints i-1 to i > mergeDistance:
             startAngles.append(i)
         if dataPoints[i] != 0 and dataPoints[i+1] == 0:
             stopAngles.append(i)
         
-        #convert the (polar) data points to points in a cartesian system
-        #offset the angle such that X-axis is left-right, Y-axis is forward-backward
+
     
     # Ensures proper conditions at beginning and end of each scan
     try:    
@@ -191,6 +150,7 @@ def segments(dataPoints):
             stopAngles.append(269)
     except IndexError:
         print("No obstacles in sight")
+        
     # Merges close obstacles
     for i,stopIndex in enumerate(stopAngles[0:len(stopAngles)-1]):
 
@@ -203,7 +163,7 @@ def segments(dataPoints):
         if D < mergeDistance:
             killList.append(i)
     
-    # Deletes gaps that are too small
+    # Deletes the gaps that are too small
     for i in reversed(killList):
         del startAngles[i+1]
         del stopAngles[i]
@@ -214,7 +174,7 @@ def segments(dataPoints):
             obstacleRadiusList.append(dataPoints[ anglePair[0] ])
         else:
             obstacleRadiusList.append(dataPoints[ anglePair[0]:anglePair[1] ])
-    # example: obstacleAnglesList = [ [15, 20], [33,46], [69,89], [125,148] ]
+    # example: obstacleAnglesList = [ [15, 20], [33,46], [69,89], [125,148] ], where each sublist is one obstacle
     # example: obstacleRadiusList = [ [0.1535, 0.1525, 0.1530, 0.1535, 0.1539], [0.7432, 0.7468, 0.7492, ...], ... ]
     return obstacleAnglesList, obstacleRadiusList
 
@@ -225,7 +185,7 @@ def medianFilter(ranges, prevRanges, prevPrevRanges):
         result[i] = numpy.nanmedian(current)
         if result[i] > stairDistance:
             result[i] = 0
-    #print(result) 
+            
     # If one of these 0-edges are found, it is either the start or end of an obstacle
     # At these points, save the data points of that obstacle in a list. One list for each obstacle
     # Keep a minimum size for each list to avoid outlier data points
@@ -256,15 +216,13 @@ def callback(data):
             fullAngleList.append(  list(range(pair[0], pair[1]))  )
 
     # Ex: fullAngleList =[ [15, 16, ..., 19,  20], [33, 34, ..., 46], [69, ..., 89], [125, ... , 148] ]
-    #print(fullAngleList)
-    
     listOfObstacles = []
     for obstNo,angles in enumerate(fullAngleList):
         obstacleClusters = ObstacleClustering.Obstacle(fullAngleList[obstNo],obstacleRadiusList[obstNo], downTiltAngle)
         listOfObstacles.append(obstacleClusters)
     
-    # Create huge list of all points
     
+    # Create huge list of all points
     allObstaclePoints = []
     for i in listOfObstacles:
         allObstaclePoints += generatePointList(i) 
@@ -274,41 +232,8 @@ def callback(data):
     
     xVals = [ o.x for o in cloud.points ]
     yVals = [ o.y for o in cloud.points ]
-    
-    #print("x = " + str(xVals) + ", y = " + str(yVals))
-    #print()
-    
-    
-    """
-    plt.axis([ -2, 2, -2, 2 ])
-    plt.scatter(xVals, yVals)
-    plt.show()
-    plt.pause(0.05)
-    """
-    """
-    if plotFigFlag == False:
-        plt.axis([ -2, 2, -2, 2 ])
-        plt.scatter(xVals, yVals)
-        plt.show()
-        plotFigFlag = True
-        plt.pause(0.05)
-    else:
-        
-        plt.clf()
-        plt.axis([ -2, 2, -2, 2 ])
-        plt.scatter(xVals, yVals)
-        plt.pause(0.05)
-        print("second statement")
-        #plt.draw()
-        """
-    #ani = animation.FuncAnimation(fig, animate, fargs=(xVals, yVals), interval=1000)
-    #plt.show()
-    
-    
+ 
     vizRanges = filteredRanges
-    
-    #for stopIndex,stopAngle in enumerate(stopAngles[0:len(stopAngles)-1]):
-    #    vizRanges[stopAngle:startAngles[stopIndex+1]] = [0]*len(vizRanges[stopAngle:startAngles[stopIndex+1]])
     
     newLaserScan = data
     newLaserScan.ranges=vizRanges
@@ -320,31 +245,17 @@ def callback(data):
         "fleft": min(min(data.ranges[171:215]),10),
         #"left": min(min(data.ranges[196:215]),10)
         }
-    #rospy.loginfo(regions['left'])
-    #regions: 0:54, 55:109, 110:164, 165:217, 218:271
-
-
 
 def listener():
     global pub
     global cloudpub
-    # In ROS, nodes are uniquely named. If two nodes with the same
-    # name are launched, the previous one is kicked off. The
-    # anonymous=True flag means that rospy will choose a unique
-    # name for our 'listener' node so that multiple listeners can
-    # run simultaneously.
-    rospy.init_node('listener', anonymous=True) #listener
+
+    rospy.init_node('listener', anonymous=True)
 
     rospy.Subscriber("scan", LaserScan, callback)
     pub = rospy.Publisher('scanFiltered', LaserScan, queue_size=4)
     cloudpub = rospy.Publisher('point_cloud', PointCloud, queue_size=4)
     
-    
-    
-    
-    
-    
-    # spin() simply keeps python from exiting until this node is stopped
     rospy.spin()
 
 if __name__ == '__main__':

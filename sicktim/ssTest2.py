@@ -1,25 +1,33 @@
 #!/usr/bin/env python
+
+# Simple obstacle avoidance program for the RT Walker of Hirata Lab, Tohoku University.
+# This program uses a SICK TIM310-1030000S01 LIDAR sensor together with a pair of Adafruit MCP4725 DAC modules
+#     to actuate powder brakes via amplifiers on the Walker whenever obstacles are detected in front of the walker
+
+# In order to start the program, first run the commands "source setup.bash" from the walkerpi/sicktim/devel folder, then start the
+#     LIDAR with the command "roslaunch sick_tim sick_tim310s01.launch" from the walkerpi/sicktim/src/sick_tim/launch folder.
+# Then start this script by running it with python3 in a separate terminal, using "python3 ssTest2.py" from its folder
+# Alternatively, there is a quick start command by using "~/gitFolder/startUpScript.sh"
+
+# Written by Valentine Lin and Eric Trollsaas, 2020
+# Contact: valentinelin@protonmail.ch, eric.trollsas@gmail.com
+
 import rospy
 from std_msgs.msg import String
 from sensor_msgs.msg import LaserScan
 import time
-#import Adafruit_MCP4725
 import adafruit_mcp4725
 import math
 import board
 import busio
-# Create a DAC instance.
-#dac1 = Adafruit_MCP4725.MCP4725(address=0x60, busnum=1)
-#dac2 = Adafruit_MCP4725.MCP4725(address=0x61, busnum=1)
 
 i2c = busio.I2C(board.SCL,board.SDA)
 dac1 = adafruit_mcp4725.MCP4725(i2c, address=0x60)
 dac2 = adafruit_mcp4725.MCP4725(i2c, address=0x61)
 
-
 brakeDistance = 0.5
-stairDistance = 10
-breakVoltage = 0.4
+stairDistance = 10 #Currently effectively unused, but may be useful for stair avoidance
+breakVoltage = 0.4 #This can be given as any value between 0 and 1, where 1 is full braking power and 0 is no power.
 
 
 def turn(direction):
@@ -45,8 +53,7 @@ def dangerDetection(regionData):
         return False
 
 def take_actions(regions):
-    #message = min(regions, key=lambda x: regions[x])
-    #print("Something is close to my" + message)
+    
     print(regions['front'])
     
     if dangerDetection(regions['front']) or math.isinf(float(regions['front'])):
@@ -59,20 +66,22 @@ def take_actions(regions):
 
             turn("left")
         elif not dangerDetection(regions['fleft']) and dangerDetection(regions['fright']):
-            #left is safe, turn here
+            #left is safe, turn left
             #print("Turn left")
             turn("left")
             
         elif not dangerDetection(regions['fright']) and dangerDetection(regions['fleft']):
-            #right is safe, turn here
+            #right is safe, turn right
             #print("Turn right")
             turn("right")
         elif not dangerDetection(regions['fleft']) and not dangerDetection(regions['fright']):
-            #Either side is safe
-            if sum(ranges[60:99]) < sum(ranges[171:210]):    
+            #Either side is safe. Determine of left or right is best
+            #Decision is made by a simple cost function:
+            #Sum up the distances of the left and right region; whichever side is highest has less obstacles -> turn to that side
+            if sum(ranges[55:99]) < sum(ranges[171:215]):    
                 turn('left')
                 print('Either side is safe, turning left')
-            elif sum(ranges[60:99]) > sum(ranges[171:210]):
+            elif sum(ranges[55:99]) > sum(ranges[171:215]):
                 turn('right')
                 print('Either side is safe, turning right')
             else:
@@ -80,18 +89,11 @@ def take_actions(regions):
         else:
             print("Error")
     else:
-        #nothing up ahead, keep going straight
+        #Nothing up ahead, keep going straight
         state_description = 'Safe'
         print("Go forward")
         turn("straight")    
-    """
-    else:
-        state_description = 'unknown case'
-        dac1.set_voltage(0, True)
-        dac2.set_voltage(0, True)
-        rospy.loginfo(regions)
-    """
-    #time.sleep(0.1)
+
     rospy.loginfo(state_description)
 
 def callback(data):
@@ -103,6 +105,9 @@ def callback(data):
             ranges[i]=0
            
     regions = {
+        #Data is indexed from 0 to 270, with 0 being the back of the sensor, and then sweeping counterclockwise (viewed from top of the sensor)
+        
+        #More sophisticated obstacle avoidance algorithms may wish to use more regions such as "right" and "left" here
         #"right": min(min(data.ranges[50:74]),10),
         "fright": min(min(data.ranges[55:99]),10),
         "front": min(min(data.ranges[100:170]),10),
@@ -111,24 +116,13 @@ def callback(data):
         }
     
     take_actions(regions)
-    #rospy.loginfo(regions['left'])
-    #regions: 0:54, 55:109, 110:164, 165:217, 218:271
-    #print "it works"
-
-
-
+    
 def listener():
 
-    # In ROS, nodes are uniquely named. If two nodes with the same
-    # name are launched, the previous one is kicked off. The
-    # anonymous=True flag means that rospy will choose a unique
-    # name for our 'listener' node so that multiple listeners can
-    # run simultaneously.
-    rospy.init_node('listener', anonymous=True) #listener
+    rospy.init_node('listener', anonymous=True)
 
     rospy.Subscriber("scan", LaserScan, callback)
 
-    # spin() simply keeps python from exiting until this node is stopped
     rospy.spin()
 
 if __name__ == '__main__':
