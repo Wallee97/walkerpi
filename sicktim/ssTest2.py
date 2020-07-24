@@ -3,32 +3,40 @@ import rospy
 from std_msgs.msg import String
 from sensor_msgs.msg import LaserScan
 import time
-import Adafruit_MCP4725
+#import Adafruit_MCP4725
+import adafruit_mcp4725
 import math
+import board
+import busio
 # Create a DAC instance.
-dac1 = Adafruit_MCP4725.MCP4725(address=0x60, busnum=1)
-dac2 = Adafruit_MCP4725.MCP4725(address=0x61, busnum=1)
+#dac1 = Adafruit_MCP4725.MCP4725(address=0x60, busnum=1)
+#dac2 = Adafruit_MCP4725.MCP4725(address=0x61, busnum=1)
 
-brakeDistance = 0.35
-stairDistance = 0.85
-breakVoltage = 1500
+i2c = busio.I2C(board.SCL,board.SDA)
+dac1 = adafruit_mcp4725.MCP4725(i2c, address=0x60)
+dac2 = adafruit_mcp4725.MCP4725(i2c, address=0x61)
+
+
+brakeDistance = 0.5
+stairDistance = 10
+breakVoltage = 0.4
 
 
 def turn(direction):
     print("Turning " + direction)
     if direction == "left":
-        dac1.set_voltage(breakVoltage, True)
-        dac2.set_voltage(0, True)
+        dac1.normalized_value = breakVoltage
+        dac2.normalized_value = 0
     elif direction == "right":
-        dac1.set_voltage(0, True)
-        dac2.set_voltage(breakVoltage, True)
+        dac1.normalized_value = 0
+        dac2.normalized_value = breakVoltage
     elif direction == "straight":
-        dac1.set_voltage(0, True)
-        dac2.set_voltage(0, True)
+        dac1.normalized_value = 0
+        dac2.normalized_value = 0
     else:
         print("Faulty message")
-        dac1.set_voltage(0, True)
-        dac2.set_voltage(0, True)
+        dac1.normalized_value = 0
+        dac2.normalized_value = 0
 
 def dangerDetection(regionData):
     if regionData > stairDistance or regionData < brakeDistance:
