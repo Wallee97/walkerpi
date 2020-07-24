@@ -1,0 +1,2 @@
+sick_tim
+-DCATKIN_DEVEL_PREFIX=/home/pi/sicktim/devel -DCMAKE_INSTALL_PREFIX=/home/pi/sicktim/install -G Unix Makefiles
