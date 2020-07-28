@@ -2,8 +2,10 @@
 
 This project was carried out by Eric Trollsås and Valentine Lin
 
-The software was designed for the Raspberry Pi 4 and SICK TIM310-1030000S01 laser scanner
+The software was designed for the Raspberry Pi 4 and SICK TIM310-1030000S01 laser scanner mounted on the RT Walker of Hirata Laboratory, Tohoku University
 
+`ssTest2.py` is a naïve obstacle avoidance algorithm that detects obstacles near the Walker and attempts to avoid them by turning left or right using a basic cost function
+`ssTest3.py` is an experimental obstacle detection and avoidance algorithm that attempts to find and classify nearby obstacles and attempts to avoid them. At the time of writing, this does not properly function due to a bug in the obstacle clustering function. Check each of these scripts for more detail.
 
 
 Required packages are:
