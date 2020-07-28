@@ -2,7 +2,7 @@
 
 This project was carried out by Eric Trollsås and Valentine Lin
 
-The software was designed for the Raspberry Pi 4 and SICK tim 310 laser scanner
+The software was designed for the Raspberry Pi 4 and SICK TIM310-1030000S01 laser scanner
 
 
 
