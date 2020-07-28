@@ -13,6 +13,7 @@ Required packages are:
 4. python 3
 
 To start the LIDAR:
+
 1: `source setup.bash` from the walkerpi/sicktim/devel/ folder
 
 2: `roslaunch sick_tim sick_tim310s01.launch` from any folder
