@@ -7,10 +7,10 @@ The software was designed for the Raspberry Pi 4 and SICK tim 310 laser scanner
 
 
 Required packages are:
-1. ROSpy
-2. Adafruit CircuitPython MCP4725
-3. Sick_tim drivers for ROS
-4. python 3
+1. [ROSpy](https://wiki.ros.org/rospy)
+2. [Adafruit CircuitPython MCP4725](https://github.com/adafruit/Adafruit_CircuitPython_MCP4725)
+3. [Sick_tim drivers for ROS](https://github.com/uos/sick_tim)
+4. [python 3](https://www.python.org/downloads/)
 
 To start the LIDAR:
 
