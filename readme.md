@@ -19,4 +19,7 @@ To start the LIDAR:
 2: `roslaunch sick_tim sick_tim310s01.launch` from any folder
 
 To run python script:
+`python3 ssTest2.py`
+
+To run experimental obstacle detection script:
 `python3 ssTest3.py`
